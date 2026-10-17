@@ -5,3 +5,7 @@ chance 0.008; samples write 2400, read 2334
 entity decodable at entity token itself (sanity): 0.902  (n=24000, chance 0.008)
 entity decodable at fact's value token (memory writes here): 0.019  (n=24000, chance 0.008)
 entity decodable at question's ANS token (memory reads here): 0.020  (n=23321, chance 0.008)
+registered delta adapter, mean forget gate alpha: filler 0.9996, fact value 0.9939
+  mean write gate beta: filler 0.160, fact value 0.965
+  retention of a fact over 448 tokens at the filler alpha: 8.30e-01
+  at initialisation alpha = sigmoid(4) = 0.9820; retention over 448 tokens 2.94e-04
