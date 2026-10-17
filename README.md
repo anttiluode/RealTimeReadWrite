@@ -67,7 +67,19 @@ Chance is 3.1% (32 values). Recall by distance for M: 29% one chunk later, 2% se
    Learning the address through 512 steps of reads and writes settled on a lazy optimum: blend
    recent values.
 
-PREREG_2 gates: see `results/gate_log_w3.txt` (filled in below when the run finished).
+PREREG_2 gates (window of 3), all fail as well:
+
+| gate | B0 | B1 additive | M delta | |
+|---|---|---|---|---|
+| R1 across chunks, 8 facts | 3.0% | 20.5% | 22.1% | FAIL |
+| R2 16 facts | 3.1% | 12.5% | 11.2% | FAIL |
+| R3 latest value after an update | 3.3% | 17.1% | 17.4% | FAIL |
+| R4 inside the window | 85.3% | 74.0% | 78.9% | FAIL (cost now 6 points) |
+| R5 32 facts | 3.3% | 8.1% | 7.2% | |
+
+The window helped a little (R1 14.9 → 22.1%, smaller in-window cost), and the delta rule's
+distinctive advantage on updated facts (R3) never appeared, because nothing was stored at the right
+address to update.
 
 ### Reading it
 
