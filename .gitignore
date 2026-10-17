@@ -1,0 +1,4 @@
+toy/cache/
+__pycache__/
+*.pyc
+results/*_stdout.txt
