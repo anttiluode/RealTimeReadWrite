@@ -16,7 +16,9 @@ from task import batch
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "cache")
 RES = os.path.join(os.path.dirname(HERE), "results")
-LOG = open(os.path.join(RES, "gate_log.txt"), "a")
+WIN = int(sys.argv[sys.argv.index("--window") + 1]) if "--window" in sys.argv else 1
+TAG = "" if WIN == 1 else f"_w{WIN}"
+LOG = open(os.path.join(RES, f"gate_log{TAG}.txt"), "a")
 
 
 def log(s):
@@ -30,7 +32,7 @@ def load(name):
 
 
 p = load("base.pkl")
-mems = {"delta": load("mem_delta.pkl"), "additive": load("mem_additive.pkl")}
+mems = {"delta": load(f"mem_delta{TAG}.pkl"), "additive": load(f"mem_additive{TAG}.pkl")}
 f = {None: jax.jit(lambda x: M.forward(p, None, x)),
      "delta": jax.jit(lambda x: M.forward(p, mems["delta"], x, "delta")),
      "additive": jax.jit(lambda x: M.forward(p, mems["additive"], x, "additive"))}
@@ -59,7 +61,7 @@ def evaluate(seed, n=1000, kinds=None, **kw):
             "by_gap": {a: {g: h / c for g, (h, c) in sorted(v.items())} for a, v in by_gap.items()}}
 
 
-log(f"=== gates {time.strftime('%Y-%m-%d %H:%M')}")
+log(f"=== gates {time.strftime('%Y-%m-%d %H:%M')} window {WIN}")
 R = {}
 R["R1"] = evaluate(101, n_facts=8, upd_frac=0.0, q_kinds=("cross",), kinds=["cross"])
 R["R2"] = evaluate(102, n_facts=16, upd_frac=0.0, q_kinds=("cross",), kinds=["cross"])
@@ -78,4 +80,4 @@ R["pass"] = {
 for k, v in R["pass"].items():
     log(f"{k} -> {'PASS' if v else 'FAIL'}")
 log("R1 by chunk gap, M: " + ", ".join(f"{g}: {100 * v:.0f}%" for g, v in R["R1"]["by_gap"]["M"].items()))
-json.dump(R, open(os.path.join(RES, "results.json"), "w"), indent=1)
+json.dump(R, open(os.path.join(RES, f"results{TAG}.json"), "w"), indent=1)

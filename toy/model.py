@@ -63,18 +63,29 @@ def value_logits(p, h):
 
 
 # ------------------------------------------------------------------ the memory
-def init_mem(key):
+def init_mem(key, win=1):
+    """win = how many positions the memory reads: [h1(t), h1(t-1), ...] (PREREG_2 uses 3)."""
     ks = iter(jax.random.split(key, 8))
     n = lambda shape, s: s * jax.random.normal(next(ks), shape)
-    return {"Wk": n((D, DK), 1 / math.sqrt(D)), "Wv": n((D, DK), 1 / math.sqrt(D)), "Wq": n((D, DK), 1 / math.sqrt(D)),
-            "wb": jnp.zeros(D), "bb": jnp.zeros(()), "wa": jnp.zeros(D), "ba": jnp.full((), 4.0),
+    Din = D * win
+    return {"Wk": n((Din, DK), 1 / math.sqrt(Din)), "Wv": n((Din, DK), 1 / math.sqrt(Din)), "Wq": n((Din, DK), 1 / math.sqrt(Din)),
+            "wb": jnp.zeros(Din), "bb": jnp.zeros(()), "wa": jnp.zeros(Din), "ba": jnp.full((), 4.0),
             "Wo": n((DK, D), 0.02)}
+
+
+def window(h1, win):
+    """Causal window [h(t), h(t-1), ..., h(t-win+1)], zeros before the episode start."""
+    if win == 1:
+        return h1
+    parts = [h1] + [jnp.pad(h1, ((0, 0), (j, 0), (0, 0)))[:, :-j] for j in range(1, win)]
+    return jnp.concatenate(parts, -1)
 
 
 def memory(m, h1, rule):
     """Read and write on every token. rule: 'delta' (write the residue) or 'additive' (write the value).
     Returns o (B,T,DK) and the final S."""
     nrm = lambda z: z / (jnp.linalg.norm(z, axis=-1, keepdims=True) + 1e-6)
+    h1 = window(h1, m["Wk"].shape[0] // D)          # window size is read off the adapter's shape
     k, q = nrm(h1 @ m["Wk"]), nrm(h1 @ m["Wq"])
     v = h1 @ m["Wv"]
     beta = jax.nn.sigmoid(h1 @ m["wb"] + m["bb"])

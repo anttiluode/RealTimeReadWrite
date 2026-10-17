@@ -55,9 +55,9 @@ def train_base(steps=2500, B=64):
     return p
 
 
-def train_mem(p, rule, steps=3000, B=16):
+def train_mem(p, rule, steps=3000, B=16, win=1):
     rng = np.random.default_rng(1)
-    m = M.init_mem(jax.random.PRNGKey(1))
+    m = M.init_mem(jax.random.PRNGKey(1), win)
     st = M.adam_init(m)
     p = jax.tree_util.tree_map(jnp.asarray, p)                 # frozen: never passed to the optimiser
 
@@ -74,14 +74,18 @@ def train_mem(p, rule, steps=3000, B=16):
         m, st, l = step(m, st, jnp.asarray(toks), jnp.asarray(tgt), lr)
         if (i + 1) % 500 == 0:
             vt, vg, vk, _ = batch(np.random.default_rng(98), 64, n_chunks=8, n_facts=8, q_kinds=("cross",))
-            log(f"memory[{rule}] step {i + 1}: loss {float(l):.3f}  cross-chunk recall {acc(np.asarray(M.forward(p, m, jnp.asarray(vt), rule)), vg):.3f}  ({time.time() - t0:.0f}s)")
-    pickle.dump(jax.tree_util.tree_map(np.asarray, m), open(os.path.join(CACHE, f"mem_{rule}.pkl"), "wb"))
+            log(f"memory[{rule}{TAG}] step {i + 1}: loss {float(l):.3f}  cross-chunk recall {acc(np.asarray(M.forward(p, m, jnp.asarray(vt), rule)), vg):.3f}  ({time.time() - t0:.0f}s)")
+    pickle.dump(jax.tree_util.tree_map(np.asarray, m), open(os.path.join(CACHE, f"mem_{rule}{TAG}.pkl"), "wb"))
 
+
+WIN = int(sys.argv[sys.argv.index("--window") + 1]) if "--window" in sys.argv else 1
+TAG = "" if WIN == 1 else f"_w{WIN}"
 
 if __name__ == "__main__":
+    log(f"window {WIN}")
     log(f"=== train {time.strftime('%Y-%m-%d %H:%M')}")
     bp = os.path.join(CACHE, "base.pkl")
     base = pickle.load(open(bp, "rb")) if os.path.exists(bp) else train_base()
     for rule in ("delta", "additive"):
-        if not os.path.exists(os.path.join(CACHE, f"mem_{rule}.pkl")):
-            train_mem(base, rule)
+        if not os.path.exists(os.path.join(CACHE, f"mem_{rule}{TAG}.pkl")):
+            train_mem(base, rule, win=WIN)
