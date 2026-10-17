@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 results/*_stdout.txt
 results/train_log.txt
+qwen/cache/
+qwen/results_qwen.json

@@ -75,4 +75,17 @@ with torch.no_grad():
     h = torch.zeros(1, 2, 8); h[0, :, 0] = 1.0
     m2(h[:, :1]); S1 = m2.S.clone(); m2(h[:, 1:])
 check("delta rule: repeating a known fact writes nothing", torch.allclose(S1, m2.S, atol=1e-5))
+
+# the full train -> gates command path, with the miniature model standing in for Qwen
+import json
+rtrw.load = lambda args: (tok, Qwen2ForCausalLM(cfg).eval())
+args = types.SimpleNamespace(model="mini", device="cpu", layer=2, dk=16, chunk=96, chunks=4, batch=4,
+                             steps=5, lr=3e-3, n_eval=16)
+for rule in ("delta", "additive"):
+    args.rule = rule
+    rtrw.train(args, tok, Qwen2ForCausalLM(cfg).eval())
+rtrw.gates(args)
+res = json.load(open(os.path.join(os.path.dirname(rtrw.__file__), "results_qwen.json")))
+check("gates command runs end to end", set(res["pass"]) == {"R1", "R2", "R3", "R4"}, str({k: res[k] for k in ("R1", "R4")}))
+os.remove(os.path.join(os.path.dirname(rtrw.__file__), "results_qwen.json"))
 sys.exit(1 if fails else 0)
