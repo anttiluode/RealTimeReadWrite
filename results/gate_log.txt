@@ -1,0 +1,23 @@
+=== gates 2026-10-17 19:20 window 1
+R1: B0 3.0%  B1 19.7%  M 14.9%  (n=8000)
+R2: B0 3.1%  B1 11.5%  M 7.4%  (n=16000)
+R3: B0 3.3%  B1 16.0%  M 11.8%  (n=8000)
+R4: B0 85.3%  B1 66.0%  M 72.9%  (n=7448)
+R5: B0 3.3%  B1 7.1%  M 4.6%  (n=31953)
+R1 -> FAIL
+R2 -> FAIL
+R3 -> FAIL
+R4 -> FAIL
+R1 by chunk gap, M: 1: 29%, 2: 15%, 3: 10%, 4: 6%, 5: 4%, 6: 1%, 7: 2%
+--- rerun after fixing the JSON write (numpy bool); gates and data unchanged ---
+=== gates 2026-10-17 19:23 window 1
+R1: B0 3.0%  B1 19.7%  M 14.9%  (n=8000)
+R2: B0 3.1%  B1 11.5%  M 7.4%  (n=16000)
+R3: B0 3.3%  B1 16.0%  M 11.8%  (n=8000)
+R4: B0 85.3%  B1 66.0%  M 72.9%  (n=7448)
+R5: B0 3.3%  B1 7.1%  M 4.6%  (n=31953)
+R1 -> FAIL
+R2 -> FAIL
+R3 -> FAIL
+R4 -> FAIL
+R1 by chunk gap, M: 1: 29%, 2: 15%, 3: 10%, 4: 6%, 5: 4%, 6: 1%, 7: 2%

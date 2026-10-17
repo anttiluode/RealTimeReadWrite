@@ -57,7 +57,7 @@ def evaluate(seed, n=1000, kinds=None, **kw):
                 s = sel & (gap == g)
                 h, c = by_gap[a].get(int(g), (0, 0))
                 by_gap[a][int(g)] = (h + int(ok[s].sum()), c + int(s.sum()))
-    return {a: hit[a] / max(cnt, 1) for a in ARMS} | {"n_questions": int(cnt),
+    return {a: float(hit[a] / max(cnt, 1)) for a in ARMS} | {"n_questions": int(cnt),
             "by_gap": {a: {g: h / c for g, (h, c) in sorted(v.items())} for a, v in by_gap.items()}}
 
 
@@ -72,10 +72,10 @@ fmt = lambda r: "  ".join(f"{a} {100 * r[a]:.1f}%" for a in ARMS) + f"  (n={r['n
 for k in R:
     log(f"{k}: {fmt(R[k])}")
 R["pass"] = {
-    "R1": R["R1"]["M"] >= 0.80 and R["R1"]["B0"] <= 0.10,
-    "R2": R["R2"]["M"] >= R["R2"]["B1"] + 0.10,
-    "R3": R["R3"]["M"] >= 0.70 and R["R3"]["M"] >= R["R3"]["B1"] + 0.20,
-    "R4": R["R4"]["M"] >= R["R4"]["B0"] - 0.05,
+    "R1": bool(R["R1"]["M"] >= 0.80 and R["R1"]["B0"] <= 0.10),
+    "R2": bool(R["R2"]["M"] >= R["R2"]["B1"] + 0.10),
+    "R3": bool(R["R3"]["M"] >= 0.70 and R["R3"]["M"] >= R["R3"]["B1"] + 0.20),
+    "R4": bool(R["R4"]["M"] >= R["R4"]["B0"] - 0.05),
 }
 for k, v in R["pass"].items():
     log(f"{k} -> {'PASS' if v else 'FAIL'}")
