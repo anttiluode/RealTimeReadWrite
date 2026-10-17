@@ -9,3 +9,6 @@ registered delta adapter, mean forget gate alpha: filler 0.9996, fact value 0.99
   mean write gate beta: filler 0.160, fact value 0.965
   retention of a fact over 448 tokens at the filler alpha: 8.30e-01
   at initialisation alpha = sigmoid(4) = 0.9820; retention over 448 tokens 2.94e-04
+query·key cosine, same entity 0.321 ± 0.084; different entity 0.318 ± 0.084
+the right fact has the best-matching key in 14.6% of questions (8 facts, chance 12.5%)
+value decodable from the written v: 96.0% (chance 3.1%)
