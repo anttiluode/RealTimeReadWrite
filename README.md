@@ -21,6 +21,7 @@ and keeps them current when they change.
 | part | what | status |
 |---|---|---|
 | `toy/` | a small frozen transformer (64-token window) + the memory, trained and tested on CPU | run, results below |
+| `qwen/jspace.py` | Gate 4: native J-space memory on frozen Qwen2.5-0.5B-Instruct, no trained parameters (PREREG_3) | written; J-lens verified against a brute-force Jacobian on a miniature Qwen2; **not run on real weights** |
 | `qwen/rtrw.py` | the same memory on frozen **Qwen2.5-0.5B**: reads a middle layer, writes before the final norm, text fed in chunks with the KV cache cleared between them | written for a GPU; full train → gates path smoke-tested on a miniature random Qwen2, **not run on real weights** |
 
 ```
@@ -96,11 +97,60 @@ address to update.
   stream. That is how they answer questions about earlier text. So point 1 may not bite on Qwen;
   point 3, learning the keys, still might. That is what `qwen/rtrw.py gates` measures.
 
+## Gate 4: a native memory in the model's own workspace (PREREG_3, written, not yet run)
+
+Both the toy above and Sol's [LiveMode](https://github.com/anttiluode/LiveMode) point at the same
+gap. LiveMode's readout works on real Qwen2.5-0.5B-Instruct (100% on 400 held-out trials), but its
+address is a SHA-256 hash of the name string, the colour codes are supplied, and a 3,584-parameter
+adapter is trained. This repo's memory had to learn its address and never did.
+
+Gate 4 removes all three crutches. It uses the **J-space** of Gurnee, Sofroniew, Lindsey et al.
+(2026, arXiv 2607.15495, "Verbalizable Representations Form a Global Workspace in Language
+Models"): the directions a model is poised to verbalize, which carry concepts in a middle band of
+layers and act as arguments for downstream computation.
+
+```
+J_l = E_{t, t'>=t, prompt} [ d h_final,t' / d h_l,t ]       the paper's J-lens, one d x d matrix per layer
+v_x = J_l^T (gamma * u_x)                                    J-lens vector of token x
+key   = J-space component of the state just before a value   (k-sparse, nonnegative, whole vocabulary)
+value = J-space component of the state at the value
+write S <- S + (v - S k) k^T       read o = S k_q       inject h <- h + alpha |h| o/|o|
+```
+
+No parameter is trained. From dev names only, the gate selects a read layer, a write layer, one
+gain, and two mean vectors used to centre the keys.
+
+| gate | question | pass |
+|---|---|---|
+| G4.1 | Does the question's last token carry *who* in the J-space? (zero-parameter probe, 48 names) | ≥ 90% |
+| G4.2 | Does adding a colour's J-lens vector flip the answer? (no fact anywhere; random direction as control) | ≥ 90%, random ≤ 40% |
+| G4.3 | Does the model *reason* with the injected colour? ("Is X the same color as a ripe banana?") | ≥ 75%, if the in-context ceiling ≥ 75% |
+| G4.4 | Live memory: facts, overwrites and filler, then late questions, 8 / 16 / 32 names | ≥ 80% at 8, ≥ 60% at 32 |
+
+G4.4 also reports these arms:
+- stale memory;
+- no memory;
+- facts in context;
+- uncentred keys;
+- an oracle key (the name's own J-lens vector, the analogue of LiveMode's hash);
+- a wrong-address read.
+
+```
+python qwen/jspace.py lens     # the J-lens for all 24 layers: 128 prompts x 896 rows, ~30-60 min on an RTX 3060
+python qwen/jspace.py gates    # G4.1-G4.4 (~30 min); log in results/gate4_log.txt
+python tests/test_jspace_smoke.py   # CPU, no download
+```
+
+The smoke test checks the J-lens against a brute-force full Jacobian on a miniature Qwen2 (max
+error 9e-8 at every layer). It also checks that pursuit recovers a planted sparse code exactly, the
+delta-rule overwrite, and the full lens → gates path. It has **not** been run on real weights:
+Hugging Face is not reachable from the machine it was written on.
+
 ## Untested next steps
 
 - **Keys from what the model already computes.** Use the frozen model's own attention keys/queries at
   the read layer (already trained to address "what is this about") as k and q, instead of learning new
-  projections.
+  projections. Gate 4 takes the J-space route to the same idea.
 - **A curriculum.** Train on one fact and one question one chunk apart before longer episodes, so
   the key gradient is strong before interference sets in.
 - **Gated filler.** A write gate that is closed by default (bias −4), so filler does not erode stored facts.

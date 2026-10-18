@@ -5,3 +5,4 @@ results/*_stdout.txt
 results/train_log.txt
 qwen/cache/
 qwen/results_qwen.json
+qwen/results_jspace.json
