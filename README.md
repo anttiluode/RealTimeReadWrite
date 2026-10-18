@@ -21,7 +21,7 @@ and keeps them current when they change.
 | part | what | status |
 |---|---|---|
 | `toy/` | a small frozen transformer (64-token window) + the memory, trained and tested on CPU | run, results below |
-| `qwen/jspace.py` | Gate 4: native J-space memory on frozen Qwen2.5-0.5B-Instruct, no trained parameters (PREREG_3) | written; J-lens verified against a brute-force Jacobian on a miniature Qwen2; **not run on real weights** |
+| `qwen/jspace.py` | Gate 4: native J-space memory on frozen Qwen2.5-0.5B-Instruct, no trained parameters (PREREG_3) | run: G4.2 PASS, G4.1 and G4.4 FAIL, G4.3 uninformative (below) |
 | `qwen/rtrw.py` | the same memory on frozen **Qwen2.5-0.5B**: reads a middle layer, writes before the final norm, text fed in chunks with the KV cache cleared between them | written for a GPU; full train → gates path smoke-tested on a miniature random Qwen2, **not run on real weights** |
 
 ```
@@ -97,7 +97,7 @@ address to update.
   stream. That is how they answer questions about earlier text. So point 1 may not bite on Qwen;
   point 3, learning the keys, still might. That is what `qwen/rtrw.py gates` measures.
 
-## Gate 4: a native memory in the model's own workspace (PREREG_3, written, not yet run)
+## Gate 4: a native memory in the model's own workspace (PREREG_3, run 2026-10-18)
 
 Both the toy above and Sol's [LiveMode](https://github.com/anttiluode/LiveMode) point at the same
 gap. LiveMode's readout works on real Qwen2.5-0.5B-Instruct (100% on 400 held-out trials), but its
@@ -143,8 +143,52 @@ python tests/test_jspace_smoke.py   # CPU, no download
 
 The smoke test checks the J-lens against a brute-force full Jacobian on a miniature Qwen2 (max
 error 9e-8 at every layer). It also checks that pursuit recovers a planted sparse code exactly, the
-delta-rule overwrite, and the full lens → gates path. It has **not** been run on real weights:
-Hugging Face is not reachable from the machine it was written on.
+delta-rule overwrite, and the full lens → gates path.
+
+### Results on Qwen2.5-0.5B-Instruct (RTX 3060, run by Antti; 128-prompt J-lens, about 32 min)
+
+**One gate passes, two fail, one is uninformative.** The memory itself failed.
+
+| gate | registered result | verdict |
+|---|---|---|
+| G4.1 address at the question token | read layer 21 (selected on dev, tie with 23 broken to the earlier): test **82.6%** (chance 2.1%) | **FAIL** (needs 90%) |
+| G4.2 write-back, layer 16, α = 0.5 | J **100%**, logit lens 100%, random direction 30.1%, none 0% (by construction), [name-token site 56.7%, band 87.0%, reported only] | **PASS** |
+| G4.3 reason with the injected colour | ceiling (fact in context) **50.0%**, J 41.7%, logit 66.7%, none 52.1%, [band 50.0%] | **UNINFORMATIVE**: the 0.5B model cannot do it even when told |
+| G4.4 live memory | see below | **FAIL** at N = 8 |
+
+| G4.4, latest colour after one overwrite each (chance 25%) | L (live) | stale | none | ctx (all in prompt) | L_raw | oracle key | wrong address |
+|---|---|---|---|---|---|---|---|
+| N = 8 | 23.1% | 21.2% | 20.0% | 30.6% | 25.6% | 35.6% | 21.2% |
+| N = 16 | 23.1% | 22.5% | 25.0% | 29.4% | 25.9% | 34.1% | 25.3% |
+| N = 32 | not completed (stopped; the gate had already failed at N = 8) | | | | | | |
+
+#### What the run shows
+
+1. **The address is not in the workspace where the question is asked.**
+   - At the name token, the J-lens names the person 100% of the time at layers 0–15. That is the
+     token's own identity.
+   - At the question's last token it is at chance through layer 15, and 12–18% at layers 16–19
+     (the middle band, the workspace).
+   - "Who" appears at the question token only in the last four layers (60–92%). There the plain
+     logit lens does almost as well, so it looks like output preparation, not an address. Layer 23
+     reaches 91.7% on test, but it was not the registered choice.
+2. **Writing is easy.** At layers 15–19, adding a colour's J-lens vector at half the residual norm
+   flips the answer every time. The plain unembedding row (logit lens) does the same at layer 16;
+   on this model the J-lens adds nothing for steering.
+3. **Writing at the name token partly reaches the answer (56.7%, reported only).** A colour planted
+   on the subject's own position at layer 16 is carried to the answer by the model's own attention
+   in over half the trials.
+4. **The live memory does nothing useful, and the oracle key barely helps (35.6%).** The address is
+   not the only failure. The stored *value* is the J-space content at the colour token, which is
+   what the model computes after reading "yellow" (it is predicting the full stop). That is not the
+   direction that makes it *say* yellow. The task itself is also hard for this model: with every
+   fact, overwrite and filler sentence in the prompt it scores only 30.6%. Sol's LiveMode context
+   arm, with one fact, scores 100% four-colour.
+
+So "experience changes what the model says" works natively, but "experience is stored and found
+again" does not compose from the J-space at 0.5B. Notes, from Sol and from this run's own numbers:
+- The memory here is d × d (3.2 MB), against LiveMode's 1 KB. They are not equal-budget memories.
+- The G4.3 logit-over-J difference (66.7% vs 41.7%, 24 items per class) is suggestive at best.
 
 ## Untested next steps
 
