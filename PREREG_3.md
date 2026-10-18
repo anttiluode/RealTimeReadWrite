@@ -128,3 +128,18 @@ J-space.
   workspace. The only supplied structure is where the template puts the value.
 
 Results are reported as registered, whatever they are.
+
+## Addendum (2026-10-18, before any gate result; the J-lens was still computing)
+
+After reading the paper's §4.3 more closely: it amplifies J-lens directions through the workspace
+range with MLP gain up to about 10×, and it intervenes at one or more layers. A single-layer
+injection may therefore wash out before a two-hop use such as yellow → banana in G4.3. One arm is
+added to G4.2 and G4.3, **reported only, with no pass criterion, and none of the registered gates or
+selections change**:
+
+- **J_band:** inject the colour's own J-lens vector at each of the four layers ending at ℓ_w
+  (ℓ_w−3 … ℓ_w). Each layer gets α/4 · ‖h_ℓ‖ at site Q, with α taken from G4.2.
+
+Possible next gate, not part of this run: restrict reads and writes to the subspace of the
+"broadcast heads". These are the top 1% of workspace-layer heads by OV gain and label preservation
+on J-lens vectors, computable from the weights alone (paper §4.3.2).

@@ -297,6 +297,43 @@ def inject_trials(fz, names, layer, alphas, vec_fn, site="Q"):
     return {a: (v[0] / v[2], v[1] / v[2], v[2]) for a, v in acc.items()}
 
 
+def band_layers(lw):
+    """PREREG_3 addendum: the four layers ending at the write layer."""
+    return list(range(max(0, lw - 3), lw + 1))
+
+
+@torch.no_grad()
+def band_delta(fz, ids, band, Vs, j, alpha, pos=-1):
+    """Inject the colour's own J-lens vector at every layer of the band, alpha split equally,
+    each scaled by that layer's clean |h| at the position."""
+    _, cap = fz.run(ids, capture=band)
+    delta = {}
+    for l in band:
+        h = cap[l][0]
+        d = torch.zeros_like(h)
+        d[pos] = (alpha / len(band) * h[pos].float().norm() * Vs[l][j]).to(h.dtype)
+        delta[l] = d[None]
+    return delta
+
+
+@torch.no_grad()
+def band_trials(fz, names, band, Vs, alpha):
+    """G4.2 with band injection (reported only). Same trials as inject_trials."""
+    cids = [tid(fz, c) for c in COLORS]
+    hit4 = hits = n = 0
+    for m in names:
+        for q in QUESTIONS:
+            ids = fz.enc(q.format(n=m))
+            logits, _ = fz.run(ids)
+            own = four(logits[0, -1].float(), cids)
+            for j in [j for j in range(len(COLORS)) if j != own]:
+                out, _ = fz.run(ids, delta=band_delta(fz, ids, band, Vs, j, alpha))
+                hit4 += int(out[0, -1, cids].float().argmax() == j)
+                hits += int(out[0, -1].float().argmax() == cids[j])
+                n += 1
+    return hit4 / n, hits / n, n
+
+
 @torch.no_grad()
 def g42(fz, Js, dev, test, log, seed=0):
     cids = [tid(fz, c) for c in COLORS]
@@ -327,6 +364,10 @@ def g42(fz, Js, dev, test, log, seed=0):
     a_s = max(ALPHAS, key=lambda a: (rs[a][0], -a))
     a4, st, n = inject_trials(fz, test, lw, [a_s], lambda j: V[j], site="S")[a_s]
     res["test"]["J_siteS"] = {"four": a4, "strict": st, "n": n, "alpha": a_s}
+    band = band_layers(lw)
+    Vs = {l: lens_vectors(fz, Js[l], cids) for l in band}
+    a4, st, n = band_trials(fz, test, band, Vs, aw)
+    res["test"]["J_band"] = {"four": a4, "strict": st, "n": n, "layers": band, "reported_only": True}
     res["pass"] = bool(res["test"]["J"]["four"] >= 0.90 and res["test"]["random"]["four"] <= 0.40)
     return res
 
@@ -345,7 +386,9 @@ def g43(fz, Js, test, lw, aw, log, seed=0):
         match = i % 2 == 0
         o = c if match else rng.choice([j for j in range(4) if j != c])
         items.append((m, c, o, match))
-    score = {k: [0, 0, 0, 0] for k in ("ceiling", "J", "logit", "none")}   # tp, n_pos, tn, n_neg
+    score = {k: [0, 0, 0, 0] for k in ("ceiling", "J", "logit", "none", "J_band")}   # tp, n_pos, tn, n_neg
+    band = band_layers(lw)
+    Vs = {l: lens_vectors(fz, Js[l], cids) for l in band}
 
     def tally(k, said_yes, match):
         s = score[k]
@@ -369,6 +412,8 @@ def g43(fz, Js, test, lw, aw, log, seed=0):
             d[-1] = (aw * hn * vec).to(h.dtype)
             out, _ = fz.run(ids, delta={lw: d[None]})
             tally(k, bool(out[0, -1, yes] > out[0, -1, no]), match)
+        out, _ = fz.run(ids, delta=band_delta(fz, ids, band, Vs, c, aw))      # addendum, reported only
+        tally("J_band", bool(out[0, -1, yes] > out[0, -1, no]), match)
     res = {k: 0.5 * (s[0] / max(s[1], 1) + s[2] / max(s[3], 1)) for k, s in score.items()}
     res["n"] = len(items)
     res["informative"] = bool(res["ceiling"] >= 0.75)
@@ -555,7 +600,7 @@ def cmd_gates(args, fz=None):
     R["G4.3"] = g43(fz, Js, test, lw, aw, log)
     g3 = R["G4.3"]
     log(f"G4.3 balanced acc: ceiling {100 * g3['ceiling']:.1f}%  J {100 * g3['J']:.1f}%  logit {100 * g3['logit']:.1f}%  "
-        f"none {100 * g3['none']:.1f}% -> {'PASS' if g3['pass'] else ('FAIL' if g3['informative'] else 'UNINFORMATIVE')}")
+        f"none {100 * g3['none']:.1f}%  [J_band {100 * g3['J_band']:.1f}%, reported only] -> {'PASS' if g3['pass'] else ('FAIL' if g3['informative'] else 'UNINFORMATIVE')}")
     jr = JSpace(fz, Js[lr], k=args.k)
     jw = jr if lw == lr else JSpace(fz, Js[lw], k=args.k)
     m_w, m_q = calibrate(fz, jr, lr, dev)
